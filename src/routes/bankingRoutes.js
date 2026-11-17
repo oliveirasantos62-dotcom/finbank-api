@@ -6,8 +6,8 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.post('/:id/deposit', authMiddleware, deposit);
-
-router.post('/:id/withdraw', authMiddleware, withdraw);
+router.use(authMiddleware);
+router.post('/:id/deposit', deposit);
+router.post('/:id/withdraw', withdraw);
 
 module.exports = router;

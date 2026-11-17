@@ -29,6 +29,7 @@ O projeto simula operações básicas de um sistema bancário, incluindo cadastr
 - Hash de senha com bcrypt
 - Autenticação utilizando JWT
 - Proteção de rotas
+- Autorização por proprietário: cada usuário acessa apenas seus próprios dados
 
 ### Usuários
 
@@ -67,14 +68,15 @@ O projeto simula operações básicas de um sistema bancário, incluindo cadastr
 - Validação das contas
 - Validação de saldo
 - Impedimento de transferência para a mesma conta
-- Controle transacional com Sequelize
+- Controle transacional com Sequelize e bloqueio de linhas para evitar concorrência
 
 ### Transações
 
 - Listagem
 - Busca por ID
-- Atualização
-- Exclusão
+- Consulta paginada
+- Edição somente da descrição, preservando os dados financeiros
+- Exclusão bloqueada para preservar o histórico
 - Registro de depósitos
 - Registro de saques
 - Registro de transferências
@@ -115,6 +117,9 @@ finbank-api/
 │   ├── services/
 │   │   └── authService.js
 │   │
+│   ├── utils/
+│   │   └── pagination.js
+│   │
 │   ├── app.js
 │   └── server.js
 │
@@ -126,7 +131,6 @@ finbank-api/
 ├── tests/
 │   └── api.test.js
 │
-├── .env
 ├── .env.example
 ├── .env.test
 ├── .gitignore
@@ -465,3 +469,30 @@ Projeto desenvolvido com objetivo educacional para praticar desenvolvimento de A
 ## Autor
 
 Gabriel Santos
+
+
+## Segurança e integridade financeira
+
+- Todas as rotas de usuários, contas e transações exigem JWT.
+- Usuários só consultam e alteram seus próprios dados e contas.
+- O identificador do proprietário da conta é obtido do token, nunca confiado ao corpo da requisição.
+- Depósitos, saques e transferências usam transações SQL e bloqueio de linhas (`FOR UPDATE`).
+- O histórico financeiro não pode ser apagado pela API. Transações permitem alterar somente a descrição; status, valor, tipo e conta são imutáveis.
+- Contas com saldo diferente de zero ou histórico não podem ser excluídas. Usuários com contas vinculadas também não podem ser excluídos.
+- Chaves estrangeiras usam `ON DELETE RESTRICT` para impedir exclusão em cascata.
+- Listagens usam paginação: `?page=1&limit=10` (limite máximo de 100 itens).
+
+## Atualização do banco de dados
+
+Após atualizar o projeto, aplique a nova migration nos bancos de desenvolvimento e teste:
+
+```bash
+npx sequelize-cli db:migrate --env development
+npx sequelize-cli db:migrate --env test
+```
+
+As respostas das listagens seguem o formato `{ data, pagination }`. A paginação contém `totalItems`, `totalPages`, `currentPage` e `itemsPerPage`.
+
+## Configuração segura
+
+Copie `.env.example` para `.env` e `.env.test`, preenchendo as credenciais localmente. Nunca envie esses arquivos ao GitHub.

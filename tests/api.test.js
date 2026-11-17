@@ -11,6 +11,7 @@ let userId;
 let accountId;
 let secondAccountId;
 let transactionId;
+let authToken;
 
 describe('FinBank API', () => {
   beforeAll(async () => {
@@ -38,6 +39,11 @@ describe('FinBank API', () => {
     expect(response.statusCode).toBe(201);
 
     userId = response.body.user.id;
+
+    const login = await request(app)
+      .post('/auth/login')
+      .send({ email: 'teste@jest.com', password: '123456' });
+    authToken = login.body.token;
   });
 
   afterAll(async () => {
@@ -70,14 +76,18 @@ describe('FinBank API', () => {
 
   describe('Usuários', () => {
     test('deve listar usuários', async () => {
-      const response = await request(app).get('/users');
+      const response = await request(app)
+        .get('/users')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.statusCode).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('deve buscar usuário pelo ID', async () => {
-      const response = await request(app).get(`/users/${userId}`);
+      const response = await request(app)
+        .get(`/users/${userId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.statusCode).toBe(200);
       expect(response.body.id).toBe(userId);
@@ -85,7 +95,9 @@ describe('FinBank API', () => {
     });
 
     test('deve retornar 404 para usuário inexistente', async () => {
-      const response = await request(app).get('/users/999999');
+      const response = await request(app)
+        .get('/users/999999')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.statusCode).toBe(404);
     });
@@ -159,17 +171,46 @@ describe('FinBank API', () => {
     });
 
     test('deve listar contas', async () => {
-      const response = await request(app).get('/accounts');
+      const response = await request(app)
+        .get('/accounts')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.statusCode).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('deve buscar conta pelo ID', async () => {
-      const response = await request(app).get(`/accounts/${accountId}`);
+      const response = await request(app)
+        .get(`/accounts/${accountId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.statusCode).toBe(200);
       expect(response.body.id).toBe(accountId);
+    });
+
+    test('não deve permitir que outro usuário consulte ou movimente uma conta', async () => {
+      const registration = await request(app).post('/auth/register').send({
+        name: 'Segundo Usuário',
+        email: 'segundo@jest.com',
+        cpf: '22222222222',
+        password: '123456',
+      });
+      expect(registration.statusCode).toBe(201);
+      const login = await request(app)
+        .post('/auth/login')
+        .send({ email: 'segundo@jest.com', password: '123456' });
+      const otherToken = login.body.token;
+
+      const accountAccess = await request(app)
+        .get(`/accounts/${accountId}`)
+        .set('Authorization', `Bearer ${otherToken}`);
+      expect(accountAccess.statusCode).toBe(404);
+
+      const depositAttempt = await request(app)
+        .post(`/accounts/${accountId}/deposit`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .send({ amount: 10 });
+      expect(depositAttempt.statusCode).toBe(404);
     });
   });
 
@@ -324,25 +365,30 @@ describe('FinBank API', () => {
 
   describe('Transações', () => {
     test('deve listar transações', async () => {
-      const response = await request(app).get('/transactions');
+      const response = await request(app)
+        .get('/transactions')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.statusCode).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('deve buscar transação pelo ID', async () => {
-      const response = await request(app).get(`/transactions/${transactionId}`);
+      const response = await request(app)
+        .get(`/transactions/${transactionId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.statusCode).toBe(200);
       expect(response.body.id).toBe(transactionId);
     });
 
     test('deve retornar 404 para transação inexistente', async () => {
-      const response = await request(app).get('/transactions/999999');
+      const response = await request(app)
+        .get('/transactions/999999')
+        .set('Authorization', `Bearer ${token}`);
 
       expect(response.statusCode).toBe(404);
     });
-
     test('deve atualizar uma transação', async () => {
       const loginResponse = await request(app).post('/auth/login').send({
         email: 'teste@jest.com',
@@ -356,7 +402,6 @@ describe('FinBank API', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           description: 'Transferência atualizada',
-          status: 'completed',
         });
 
       expect(response.statusCode).toBe(200);
@@ -376,7 +421,30 @@ describe('FinBank API', () => {
         .delete(`/transactions/${transactionId}`)
         .set('Authorization', `Bearer ${token}`);
 
-      expect(response.statusCode).toBe(204);
+      expect(response.statusCode).toBe(409);
+    });
+
+    test('não deve permitir alterar o status de uma transação financeira', async () => {
+      const response = await request(app)
+        .put(`/transactions/${transactionId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'cancelled' });
+      expect(response.statusCode).toBe(409);
+    });
+
+    test('deve exigir autenticação para listar contas', async () => {
+      const response = await request(app).get('/accounts');
+      expect(response.statusCode).toBe(401);
+    });
+
+    test('deve retornar paginação nas listagens', async () => {
+      const response = await request(app)
+        .get('/accounts?page=1&limit=1')
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(response.statusCode).toBe(200);
+      expect(response.body.pagination.currentPage).toBe(1);
+      expect(response.body.pagination.itemsPerPage).toBe(1);
+      expect(response.body.data.length).toBeLessThanOrEqual(1);
     });
   });
 });

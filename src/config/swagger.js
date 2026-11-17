@@ -150,10 +150,6 @@ const options = {
               type: 'integer',
               example: 1,
             },
-            userId: {
-              type: 'integer',
-              example: 1,
-            },
             number: {
               type: 'string',
               example: '00012345',
@@ -183,12 +179,8 @@ const options = {
 
         AccountInput: {
           type: 'object',
-          required: ['userId', 'number'],
+          required: ['number'],
           properties: {
-            userId: {
-              type: 'integer',
-              example: 1,
-            },
             number: {
               type: 'string',
               example: '00012345',
@@ -952,5 +944,13 @@ swaggerDocument.paths = {
     },
   },
 };
+
+// Todas as rotas de negócio exigem JWT; autenticação é a única exceção.
+for (const [path, methods] of Object.entries(swaggerDocument.paths)) {
+  if (path.startsWith('/auth/')) continue;
+  for (const operation of Object.values(methods)) {
+    if (operation && typeof operation === 'object') operation.security = [{ bearerAuth: [] }];
+  }
+}
 
 module.exports = swaggerDocument;

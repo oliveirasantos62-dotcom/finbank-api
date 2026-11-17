@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 
-const { User } = require('../models');
+const { User, Account } = require('../models');
+const { getPagination, paginationMeta } = require('../utils/pagination');
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -86,13 +87,9 @@ async function createUser(req, res) {
 
 async function getUsers(req, res) {
   try {
-    const users = await User.findAll({
-      attributes: {
-        exclude: ['password'],
-      },
-    });
-
-    return res.status(200).json(users);
+    const { page, limit, offset } = getPagination(req.query);
+    const result = await User.findAndCountAll({ where: { id: req.user.id }, attributes: { exclude: ['password'] }, limit, offset });
+    return res.status(200).json({ data: result.rows, pagination: paginationMeta(result.count, page, limit) });
   } catch (error) {
     return res.status(500).json({
       message: 'Erro ao buscar usuários',
@@ -102,6 +99,7 @@ async function getUsers(req, res) {
 
 async function getUserById(req, res) {
   try {
+    if (Number(req.params.id) !== Number(req.user.id)) return res.status(404).json({ message: 'Usuário não encontrado' });
     const user = await User.findByPk(req.params.id, {
       attributes: {
         exclude: ['password'],
@@ -126,6 +124,7 @@ async function updateUser(req, res) {
   try {
     const { name, email, cpf, password } = req.body;
 
+    if (Number(req.params.id) !== Number(req.user.id)) return res.status(404).json({ message: 'Usuário não encontrado' });
     const user = await User.findByPk(req.params.id);
 
     if (!user) {
@@ -208,6 +207,7 @@ async function updateUser(req, res) {
 
 async function deleteUser(req, res) {
   try {
+    if (Number(req.params.id) !== Number(req.user.id)) return res.status(404).json({ message: 'Usuário não encontrado' });
     const user = await User.findByPk(req.params.id);
 
     if (!user) {
@@ -216,6 +216,8 @@ async function deleteUser(req, res) {
       });
     }
 
+    const accountCount = await Account.count({ where: { userId: user.id } });
+    if (accountCount > 0) return res.status(409).json({ message: 'Usuário possui contas vinculadas. Encerre as contas antes de excluir o cadastro.' });
     await user.destroy();
 
     return res.status(204).send();

@@ -12,13 +12,11 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+router.use(authMiddleware);
 router.get('/', getUsers);
 router.get('/:id', getUserById);
-
-router.post('/', authMiddleware, createUser);
-
-router.put('/:id', authMiddleware, updateUser);
-
-router.delete('/:id', authMiddleware, deleteUser);
+router.post('/', createUser);
+router.put('/:id', updateUser);
+router.delete('/:id', deleteUser);
 
 module.exports = router;

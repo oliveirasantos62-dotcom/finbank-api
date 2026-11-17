@@ -5,6 +5,8 @@ const Transaction = require('./Transaction');
 User.hasMany(Account, {
   foreignKey: 'userId',
   as: 'accounts',
+  onDelete: 'RESTRICT',
+  onUpdate: 'CASCADE',
 });
 
 Account.belongsTo(User, {
@@ -15,6 +17,8 @@ Account.belongsTo(User, {
 Account.hasMany(Transaction, {
   foreignKey: 'accountId',
   as: 'transactions',
+  onDelete: 'RESTRICT',
+  onUpdate: 'CASCADE',
 });
 
 Transaction.belongsTo(Account, {
